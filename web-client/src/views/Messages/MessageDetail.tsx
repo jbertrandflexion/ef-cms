@@ -99,14 +99,17 @@ export const MessageDetail = connect(
         <CaseDetailHeader className="margin-bottom-0" />
         <CaseDetailSubnavTabs />
 
-        <section className="usa-section grid-container message-detail">
+        <section
+          className="usa-section grid-container message-detail"
+          data-testid="message-detail-container"
+        >
           <SuccessNotification />
           <ErrorNotification />
           {formattedMessageDetail.isCompleted && (
             <div
               aria-live="polite"
-              className="usa-alert usa-alert--warning"
-              data-testid="message-detail-warning-alert"
+              className="usa-alert usa-alert--success"
+              data-testid="message-detail-success-alert"
               role="alert"
             >
               <div className="usa-alert__body">

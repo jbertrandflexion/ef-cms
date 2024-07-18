@@ -21,6 +21,7 @@ import {
   PRACTITIONER_ASSOCIATION_DOCUMENT_TYPES,
   REVISED_TRANSCRIPT_EVENT_CODE,
   ROLES,
+  Role,
   STIN_DOCKET_ENTRY_TYPE,
   TRACKED_DOCUMENT_TYPES_EVENT_CODES,
   TRANSCRIPT_EVENT_CODE,
@@ -45,7 +46,7 @@ import {
 const canDownloadSTIN = (
   entry: RawDocketEntry,
   petitionDocketEntry: RawDocketEntry,
-  user: RawUser,
+  user: { role: Role },
 ): boolean => {
   if (
     user.role === ROLES.petitionsClerk &&
@@ -625,6 +626,10 @@ export class DocketEntry extends JoiValidationEntity {
     return ORDER_EVENT_CODES.includes(eventCode);
   }
 
+  static isSearchable(eventCode: string): boolean {
+    return DocketEntry.isOpinion(eventCode) || DocketEntry.isOrder(eventCode);
+  }
+
   static isMotion(eventCode: string): boolean {
     return MOTION_EVENT_CODES.includes(eventCode);
   }
@@ -678,6 +683,41 @@ export class DocketEntry extends JoiValidationEntity {
   static isSealedToExternal = ({ sealedTo }: RawDocketEntry): boolean =>
     sealedTo === DOCKET_ENTRY_SEALED_TO_TYPES.EXTERNAL;
 
+  static canUserViewSubmittedDocketEntry(
+    entry: RawDocketEntry,
+    user: {
+      userId: string;
+      role: Role;
+    },
+  ) {
+    type userFillingLogic = (
+      docketEntry: RawDocketEntry,
+      userInfo: {
+        userId: string;
+        role: Role;
+      },
+    ) => boolean;
+
+    const USER_FILLED_LOGIC_DICTIONARY: { [key: string]: userFillingLogic } = {
+      [ROLES.privatePractitioner]: (docketEntry, userInfo) =>
+        docketEntry.userId === userInfo.userId,
+      [ROLES.petitioner]: (docketEntry, userInfo) =>
+        (docketEntry.filers || []).some(userId => userInfo.userId === userId),
+    };
+    const DEFAULT_CALLBACK = () => false;
+
+    const USER_FILLED_LOGIC =
+      USER_FILLED_LOGIC_DICTIONARY[user.role] || DEFAULT_CALLBACK;
+    const USER_FILLED_DOCKET_ENTRY = USER_FILLED_LOGIC(entry, user);
+
+    const ALLOWED_EVENT_CODES_TO_VIEW = ['P', 'ATP', 'DISC'];
+
+    return (
+      USER_FILLED_DOCKET_ENTRY &&
+      ALLOWED_EVENT_CODES_TO_VIEW.includes(entry.eventCode)
+    );
+  }
+
   static isDownloadable = (
     entry: RawDocketEntry,
     {
@@ -687,7 +727,7 @@ export class DocketEntry extends JoiValidationEntity {
       visibilityChangeDate,
     }: {
       rawCase: RawCase | RawPublicCase;
-      user: RawUser;
+      user: { userId: string; role: Role };
       isTerminalUser: boolean;
       visibilityChangeDate: string;
     },
@@ -707,7 +747,10 @@ export class DocketEntry extends JoiValidationEntity {
     if (User.isInternalUser(user.role)) return true;
 
     if (!DocketEntry.isServed(entry) && !DocketEntry.isUnservable(entry)) {
-      return false;
+      const USER_CAN_VIEW_SUBMITTED_DOCKET_ENTRY =
+        DocketEntry.canUserViewSubmittedDocketEntry(entry, user);
+
+      if (!USER_CAN_VIEW_SUBMITTED_DOCKET_ENTRY) return false;
     }
 
     if (user.role === ROLES.irsSuperuser)

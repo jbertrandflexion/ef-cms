@@ -1,8 +1,9 @@
 /* eslint-disable max-lines */
-import { FormattedPendingMotionWithWorksheet } from '@shared/business/useCases/pendingMotion/getPendingMotionDocketEntriesForCurrentJudgeInteractor';
-import { GetCasesByStatusAndByJudgeResponse } from '@shared/business/useCases/judgeActivityReport/getCaseWorksheetsByJudgeInteractor';
+import { FormattedPendingMotionWithWorksheet } from '@web-api/business/useCases/pendingMotion/getPendingMotionDocketEntriesForCurrentJudgeInteractor';
+import { GetCasesByStatusAndByJudgeResponse } from '@web-api/business/useCases/judgeActivityReport/getCaseWorksheetsByJudgeInteractor';
 import { JudgeActivityReportState } from './judgeActivityReportState';
 import { RawCaseDeadline } from '@shared/business/entities/CaseDeadline';
+import { RawMessage } from '@shared/business/entities/Message';
 import { RawUser } from '@shared/business/entities/User';
 import { TAssociatedCase } from '@shared/business/useCases/getCasesForUserInteractor';
 import { addCourtIssuedDocketEntryHelper } from './computeds/addCourtIssuedDocketEntryHelper';
@@ -20,6 +21,7 @@ import { appInstanceManagerHelper } from './computeds/appInstanceManagerHelper';
 import { applyStampFormHelper } from './computeds/applyStampFormHelper';
 import { batchDownloadHelper } from './computeds/batchDownloadHelper';
 import { blockedCasesReportHelper } from './computeds/blockedCasesReportHelper';
+import { caseAssociationRequestHelper } from './computeds/caseAssociationRequestHelper';
 import { caseDeadlineReportHelper } from './computeds/caseDeadlineReportHelper';
 import { caseDetailEditHelper } from './computeds/caseDetailEditHelper';
 import { caseDetailHeaderHelper } from './computeds/caseDetailHeaderHelper';
@@ -89,11 +91,11 @@ import { internalPetitionPartiesHelper } from './computeds/internalPetitionParti
 import { internalTypesHelper } from './computeds/internalTypesHelper';
 import { judgeActivityReportHelper } from './computeds/JudgeActivityReport/judgeActivityReportHelper';
 import { loadingHelper } from './computeds/loadingHelper';
-import { loginHelper } from '@web-client/presenter/computeds/Login/loginHelper';
 import { menuHelper } from './computeds/menuHelper';
 import { messageDocumentHelper } from './computeds/messageDocumentHelper';
 import { messageModalHelper } from './computeds/messageModalHelper';
 import { messagesHelper } from './computeds/messagesHelper';
+import { messagesIndividualInboxHelper } from './computeds/messagesIndividualInboxHelper';
 import { myAccountHelper } from './computeds/myAccountHelper';
 import { noticeStatusHelper } from './computeds/noticeStatusHelper';
 import { orderTypesHelper } from './computeds/orderTypesHelper';
@@ -115,7 +117,6 @@ import { printPaperServiceHelper } from './computeds/printPaperServiceHelper';
 import { recentMessagesHelper } from './computeds/recentMessagesHelper';
 import { removeFromTrialSessionModalHelper } from './computeds/removeFromTrialSessionModalHelper';
 import { reportMenuHelper } from './computeds/reportMenuHelper';
-import { requestAccessHelper } from './computeds/requestAccessHelper';
 import { reviewSavedPetitionHelper } from './computeds/reviewSavedPetitionHelper';
 import { scanBatchPreviewerHelper } from './computeds/scanBatchPreviewerHelper';
 import { scanHelper } from './computeds/scanHelper';
@@ -196,6 +197,10 @@ export const computeds = {
   blockedCasesReportHelper: blockedCasesReportHelper as unknown as ReturnType<
     typeof blockedCasesReportHelper
   >,
+  caseAssociationRequestHelper:
+    caseAssociationRequestHelper as unknown as ReturnType<
+      typeof caseAssociationRequestHelper
+    >,
   caseDeadlineReportHelper: caseDeadlineReportHelper as unknown as ReturnType<
     typeof caseDeadlineReportHelper
   >,
@@ -389,7 +394,6 @@ export const computeds = {
     typeof judgeActivityReportHelper
   >,
   loadingHelper: loadingHelper as unknown as ReturnType<typeof loadingHelper>,
-  loginHelper: loginHelper as unknown as ReturnType<typeof loginHelper>,
   menuHelper: menuHelper as unknown as ReturnType<typeof menuHelper>,
   messageDocumentHelper: messageDocumentHelper as unknown as ReturnType<
     typeof messageDocumentHelper
@@ -400,6 +404,10 @@ export const computeds = {
   messagesHelper: messagesHelper as unknown as ReturnType<
     typeof messagesHelper
   >,
+  messagesIndividualInboxHelper:
+    messagesIndividualInboxHelper as unknown as ReturnType<
+      typeof messagesIndividualInboxHelper
+    >,
   myAccountHelper: myAccountHelper as unknown as ReturnType<
     typeof myAccountHelper
   >,
@@ -467,9 +475,6 @@ export const computeds = {
     >,
   reportMenuHelper: reportMenuHelper as unknown as ReturnType<
     typeof reportMenuHelper
-  >,
-  requestAccessHelper: requestAccessHelper as unknown as ReturnType<
-    typeof requestAccessHelper
   >,
   reviewSavedPetitionHelper: reviewSavedPetitionHelper as unknown as ReturnType<
     typeof reviewSavedPetitionHelper
@@ -599,6 +604,9 @@ export const baseState = {
   clientConnectionId: '',
   closedCases: [] as TAssociatedCase[],
   cognito: {} as any,
+  coldCaseReport: {
+    entries: [],
+  },
   completeForm: {},
   constants: {} as ReturnType<typeof getConstants>,
   createOrderAddedDocketNumbers: undefined as unknown as string[],
@@ -671,7 +679,14 @@ export const baseState = {
   legacyAndCurrentJudges: [],
   login: {} as any,
   maintenanceMode: false,
+  messages: [] as RawMessage[],
   messagesInboxCount: 0,
+  messagesPage: {
+    completionSuccess: false,
+    messagesCompletedAt: '',
+    messagesCompletedBy: '',
+    selectedMessages: new Map() as Map<string, string>,
+  },
   messagesSectionCount: 0,
   modal: {
     docketEntry: undefined,
@@ -731,6 +746,8 @@ export const baseState = {
     batches: [],
     currentPageIndex: 0, // batches from scanning
     isScanning: false,
+    scanMode: undefined,
+    scannerSourceName: undefined,
     selectedBatchIndex: 0,
   },
   screenMetadata: {} as any,
@@ -755,6 +772,7 @@ export const baseState = {
     sortField: 'createdAt',
     sortOrder: ASCENDING,
   },
+  todaysDate: '',
   token: '',
   trialSession: cloneDeep(initialTrialSessionState),
   trialSessionJudge: {

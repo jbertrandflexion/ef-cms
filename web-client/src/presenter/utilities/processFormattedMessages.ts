@@ -6,34 +6,56 @@ const { CASE_SERVICES_SUPERVISOR_SECTION, DESCENDING } = getConstants();
 
 type TableSort = { sortField: string; sortOrder?: string };
 
+export const SUPPORTED_SORT_FIELDS = [
+  'createdAt',
+  'completedAt',
+  'completedBy',
+  'completedBySection',
+  'completedMessage',
+  'subject',
+  'caseTitle',
+  'caseStatus',
+  'from',
+  'to',
+  'toSection',
+  'fromSectionFormatted',
+];
+
 export const sortFormattedMessages = (
   formattedCaseMessages,
   tableSort: null | TableSort = null,
 ) => {
-  const sortedFormattedMessages = formattedCaseMessages.sort((a, b) => {
-    let sortNumber = 0;
+  const sortedFormattedMessages = formattedCaseMessages.sort(
+    (messageA, messageB) => {
+      let sortNumber = 0;
 
-    if (!tableSort) {
-      sortNumber = a.createdAt.localeCompare(b.createdAt);
-    } else if (
-      ['createdAt', 'completedAt', 'subject'].includes(tableSort.sortField)
-    ) {
-      sortNumber = a[tableSort.sortField].localeCompare(b[tableSort.sortField]);
-    } else if (tableSort.sortField === 'docketNumber') {
-      const aSplit = a.docketNumber.split('-');
-      const bSplit = b.docketNumber.split('-');
+      if (!tableSort) {
+        sortNumber = messageA.createdAt.localeCompare(messageB.createdAt);
+      } else if (SUPPORTED_SORT_FIELDS.includes(tableSort.sortField)) {
+        const messageASortField: string = messageA[tableSort.sortField] || '';
+        const messageBSortField: string = messageB[tableSort.sortField] || '';
 
-      if (aSplit[1] !== bSplit[1]) {
-        // compare years if they aren't the same;
-        // compare as strings, because they *might* have suffix
-        sortNumber = aSplit[1].localeCompare(bSplit[1]);
-      } else {
-        // compare index if years are the same, compare as integers
-        sortNumber = +aSplit[0] - +bSplit[0];
+        sortNumber = messageASortField.localeCompare(messageBSortField);
+      } else if (tableSort.sortField === 'docketNumber') {
+        const [messageADocketNumberIndex, messageADocketNumberYear] =
+          messageA.docketNumber.split('-');
+        const [messageBDocketNumberIndex, messageBDocketNumberYear] =
+          messageB.docketNumber.split('-');
+
+        if (messageADocketNumberYear !== messageBDocketNumberYear) {
+          // compare years if they aren't the same;
+          // compare as strings, because they *might* have suffix
+          sortNumber = messageADocketNumberYear.localeCompare(
+            messageBDocketNumberYear,
+          );
+        } else {
+          // compare index if years are the same, compare as integers
+          sortNumber = +messageADocketNumberIndex - +messageBDocketNumberIndex;
+        }
       }
-    }
-    return sortNumber;
-  });
+      return sortNumber;
+    },
+  );
 
   if (tableSort && tableSort.sortOrder === DESCENDING) {
     return sortedFormattedMessages.reverse();
@@ -60,6 +82,7 @@ export const sortCompletedMessages = (
 
 // useful for users that have a large amount of messages (ADC Users) since
 // recalculating the formatted date fields is expensive.
+
 let messageCache = null;
 let lastCacheKey = null;
 
@@ -70,8 +93,8 @@ export const getFormattedMessages = ({
   cacheKey = applicationContext.getUniqueId(),
 }) => {
   // We cache these results because recalculating these dates takes a lot of time.
-  // this cache is cleared from the resetCacheKeyAction whenever a user changes their displayed
-  // queue & section type.
+  // this cache is cleared by the resetCacheKeyAction
+
   if (cacheKey !== lastCacheKey) {
     // we calculate these outside of the .map function because calling them 3000 times (ADC User)
     // takes a lot of time due to the nature of doing string / date logic.
